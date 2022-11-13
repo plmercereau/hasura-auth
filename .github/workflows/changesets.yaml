@@ -5,9 +5,6 @@ on:
     branches: [main]
     paths-ignore:
       - 'docs/**'
-      - 'dashboard/**'
-      - 'examples/**'
-      - 'assets/**'
       - '**.md'
       - '!.changeset/**'
       - 'LICENSE'
