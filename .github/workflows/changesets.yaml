@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'patches/**'
+      - 'examples/**'
+      - 'assets/**'
+      - '**.md'
+      - '!.changeset/**'
+      - 'LICENSE'
+
+jobs:
+  test:
+    uses: nhost/hasura-auth/.github/workflows/test.yml@main
+  version:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Create PR or Publish release
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm run ci:version
+          commit: 'chore: update versions'
+          title: 'chore: update versions'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: version
+    uses: nhost/hasura-auth/.github/workflows/publish.yml@main
+    if: jobs.version.steps.changesets.outputs.hasChangesets == 'false'
+
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      AWS_STAGING_ACCOUNT_ID: ${{ secrets.AWS_STAGING_ACCOUNT_ID }}
+      AWS_PRODUCTION_ACCOUNT_ID: ${{ secrets.AWS_PRODUCTION_ACCOUNT_ID }}
