@@ -12,19 +12,25 @@ import {
   createEmailRedirectionLink,
 } from '@/utils';
 import { emailClient } from '@/email';
-import { EMAIL_TYPES, PasswordLessEmailBody } from '@/types';
+import { EMAIL_TYPES, UserRegistrationOptionsWithRedirect } from '@/types';
 import { sendError } from '@/errors';
 import { Joi, email, registrationOptions } from '@/validation';
 
-export const signInPasswordlessEmailSchema = Joi.object({
-  email: email.required(),
-  options: registrationOptions,
-}).meta({ className: 'SignInPasswordlessEmailSchema' });
+export type PasswordLessEmailRequestBody = {
+  email: string;
+  options: UserRegistrationOptionsWithRedirect;
+};
+
+export const signInPasswordlessEmailSchema =
+  Joi.object<PasswordLessEmailRequestBody>({
+    email: email.required(),
+    options: registrationOptions,
+  }).meta({ className: 'SignInPasswordlessEmailSchema' });
 
 export const signInPasswordlessEmailHandler: RequestHandler<
   {},
   {},
-  PasswordLessEmailBody
+  PasswordLessEmailRequestBody
 > = async (req, res) => {
   if (!ENV.AUTH_EMAIL_PASSWORDLESS_ENABLED) {
     return sendError(res, 'disabled-endpoint');
@@ -111,6 +117,7 @@ export const signInPasswordlessEmailHandler: RequestHandler<
       link,
       displayName: user.displayName,
       email,
+      newEmail: user.newEmail,
       ticket,
       redirectTo: encodeURIComponent(redirectTo),
       locale: user.locale ?? ENV.AUTH_LOCALE_DEFAULT,
@@ -119,5 +126,5 @@ export const signInPasswordlessEmailHandler: RequestHandler<
     },
   });
 
-  return res.send(ReasonPhrases.OK);
+  return res.json(ReasonPhrases.OK);
 };

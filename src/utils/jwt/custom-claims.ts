@@ -1,10 +1,15 @@
 import { jsonToGraphQLQuery, VariableType } from 'json-to-graphql-query';
-import { set } from 'dot-prop';
+import { get, set } from 'dot-prop';
 import jsonata from 'jsonata';
 
 import { ENV } from '../env';
 import { client } from '../gql-sdk';
 import { logger } from '@/logger';
+
+/**
+ * List of known JSON fields, in a dot-prop notation
+ */
+const JSON_FIELDS = ['metadata'];
 
 /**
  * Convert array to Postgres array
@@ -15,13 +20,11 @@ function toPgArray(arr: string[]): string {
   return `{${m}}`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const escapeValueToPg = (value: any): string => {
+export const escapeValueToPg = (value: unknown): string => {
   // ? Why escaping values? See:
   // * https://hasura.io/docs/latest/graphql/core/auth/authorization/roles-variables.html#format-of-session-variables
   // * https://github.com/hasura/graphql-engine/issues/1902
-  const type = typeof value;
-  if (type === 'string') {
+  if (typeof value === 'string') {
     return value;
   } else if (Array.isArray(value)) {
     return toPgArray(value);
@@ -42,11 +45,26 @@ const createCustomFieldQuery = (jwtFields: Record<string, string>): string => {
   // ! Advanced JSONata expressions won't work, only basic 'dot' paths e.g. author.books.title
   const fields = Object.values(jwtFields).reduce<Record<string, unknown>>(
     (aggr, path) => {
-      set(aggr, path, true);
+      // * Remove '[]' from the path
+      const cleanPath = path.replace(/\[\]/, '');
+      set(aggr, cleanPath, true);
       return aggr;
     },
     {}
   );
+
+  // * Do not extend JSON field sub-paths into the GraphQL query
+  JSON_FIELDS.forEach((field) => {
+    if (get(fields, field)) {
+      set(fields, field, true);
+    }
+  });
+
+  // * Do not try to expand the `metadata` column as we know it is a JSON column
+  // * See: https://github.com/nhost/hasura-auth/issues/204#issuecomment-1281363335
+  if (fields.metadata) {
+    fields.metadata = true;
+  }
   // * Prepare the query so it will accept userId as a variable
   const query = {
     query: {
@@ -82,7 +100,6 @@ export const generateCustomClaims = async (userId: string) => {
     } = await client.rawRequest(request, {
       userId,
     });
-
     // * Aggregate each 'name' key of the object with its value evaluated in JSONata
     return Object.entries(ENV.AUTH_JWT_CUSTOM_CLAIMS).reduce<
       Record<string, unknown>
@@ -92,15 +109,20 @@ export const generateCustomClaims = async (userId: string) => {
         const expression = jsonata(path);
         // * Evaluate the JSONata expression from the fetched user data
         const value = expression.evaluate(user, expression);
-        // * Convert value into a PostgreSQL format that can be used by the Hasura permissions system
-        // * see {@link escapeValueToPg}
-        const jsonataValue = escapeValueToPg(value);
-        // * Add the result to the aggregated object, prefixed with `x-hasura-`
-        aggr[`x-hasura-${name}`] = jsonataValue;
+        // * Don't add the claim if the value is null or undefined
+        if (value != undefined) {
+          // * Convert value into a PostgreSQL format that can be used by the Hasura permissions system
+          // * see {@link escapeValueToPg}
+          const jsonataValue = escapeValueToPg(value);
+          // * Add the result to the aggregated object, prefixed with `x-hasura-`
+          aggr[`x-hasura-${name}`] = jsonataValue;
+        }
       } catch {
-        // * Don't raise errors if JSONata fails. Set the currently processed claim and log a warning
+        // * Don't raise errors if JSONata fails, and log a warning
         logger.warn(`Invalid JSONata expression`, { user, path });
-        aggr[`x-hasura-${name}`] = null;
+        // * Do not add the claim to the aggregated object
+        /** @see {@link https://github.com/nhost/hasura-auth/issues/95} */
+        // aggr[`x-hasura-${name}`] = null;
       }
       return aggr;
     }, {});

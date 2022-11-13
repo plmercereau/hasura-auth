@@ -59,6 +59,7 @@ export const handleDeanonymizeUserEmailPassword = async (
     userRoles: allowedRoles.map((role: string) => ({ role, userId })),
   });
 
+  // TODO use createVerifyEmailTicket()
   const ticket = `verifyEmail:${uuidv4()}`;
   const ticketExpiresAt = generateTicketExpiresAt(60 * 60);
 
@@ -95,7 +96,7 @@ export const handleDeanonymizeUserEmailPassword = async (
         headers: {
           'x-ticket': {
             prepared: true,
-            value: ticket as string,
+            value: ticket,
           },
           'x-redirect-to': {
             prepared: true,
@@ -115,6 +116,7 @@ export const handleDeanonymizeUserEmailPassword = async (
         link,
         displayName: user.displayName,
         email,
+        newEmail: user.newEmail,
         ticket,
         redirectTo: encodeURIComponent(redirectTo),
         locale: user.locale ?? ENV.AUTH_LOCALE_DEFAULT,
@@ -124,5 +126,5 @@ export const handleDeanonymizeUserEmailPassword = async (
     });
   }
 
-  res.send(ReasonPhrases.OK);
+  res.json(ReasonPhrases.OK);
 };

@@ -39,6 +39,11 @@ if (process.env.AUTH_JWT_CUSTOM_CLAIMS) {
   }
 });
 
+if (process.env.AUTH_EMAIL_TEMPLATE_FETCH_URL) {
+  warnings.push(
+    `The 'AUTH_EMAIL_TEMPLATE_FETCH_URL' environment variable is deprecated, and the feature will be deactivated soon. Please include your templates in the file system instead.`
+  );
+}
 if (PROVIDERS.apple) {
   [
     'AUTH_PROVIDER_APPLE_CLIENT_ID',
@@ -171,6 +176,19 @@ if (PROVIDERS.github) {
   });
 }
 
+if (PROVIDERS.azuread) {
+  [
+    'AUTH_PROVIDER_AZUREAD_CLIENT_ID',
+    'AUTH_PROVIDER_AZUREAD_CLIENT_SECRET',
+  ].forEach((env) => {
+    if (isUnset(process.env[env])) {
+      errors.push(
+        `Env var ${env} is required when the Azure AD provider is enabled but no value was provided`
+      );
+    }
+  });
+}
+
 if (ENV.AUTH_SMS_PROVIDER) {
   if (ENV.AUTH_SMS_PROVIDER === 'twilio') {
     [
@@ -187,6 +205,27 @@ if (ENV.AUTH_SMS_PROVIDER) {
   } else {
     errors.push(
       `Incorrect SMS provider - AUTH_SMS_PROVIDER of value '${ENV.AUTH_SMS_PROVIDER}' is not one of the supported. Supported providers are: 'twilio'`
+    );
+  }
+}
+
+if (ENV.AUTH_WEBAUTHN_ENABLED) {
+  if (isUnset(ENV.AUTH_CLIENT_URL)) {
+    errors.push(
+      `Env var AUTH_CLIENT_URL is required when the Webauthn is enabled, but no value was provided`
+    );
+  }
+  if (isUnset(ENV.AUTH_WEBAUTHN_RP_NAME)) {
+    errors.push(
+      `Env var AUTH_WEBAUTHN_RP_NAME is required when the Webauthn is enabled, but no value was provided`
+    );
+  }
+  if (
+    isUnset(process.env['AUTH_WEBAUTHN_RP_ORIGINS']) &&
+    isUnset(process.env['AUTH_CLIENT_URL'])
+  ) {
+    errors.push(
+      `Webauthn requires at least on of the following to be set: 'AUTH_WEBAUTHN_RP_ORIGINS', 'AUTH_CLIENT_URL'`
     );
   }
 }

@@ -47,7 +47,7 @@ export const userEmailSendVerificationEmailHandler: RequestHandler<
   }
 
   // TODO: possibly check when last email was sent to minimize abuse
-
+  // TODO use createVerifyEmailTicket()
   const ticket = `verifyEmail:${uuidv4()}`;
   const ticketExpiresAt = generateTicketExpiresAt(60 * 60 * 24 * 30); // 30 days
 
@@ -92,6 +92,8 @@ export const userEmailSendVerificationEmailHandler: RequestHandler<
     locals: {
       link,
       displayName: user.displayName,
+      email: user.email,
+      newEmail: user.newEmail,
       ticket,
       redirectTo: encodeURIComponent(redirectTo),
       locale: user.locale ?? ENV.AUTH_LOCALE_DEFAULT,
@@ -100,5 +102,5 @@ export const userEmailSendVerificationEmailHandler: RequestHandler<
     },
   });
 
-  return res.send(ReasonPhrases.OK);
+  return res.json(ReasonPhrases.OK);
 };

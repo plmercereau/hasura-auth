@@ -14,7 +14,19 @@ export const mfatotpGenerateHandler: RequestHandler<
   }
   const { userId } = req.auth as RequestAuth;
 
-  const totpSecret = authenticator.generateSecret();
+  const { user } = await gqlSdk.user({
+    id: userId,
+  });
+
+  if (!user) {
+    return sendError(res, 'user-not-found');
+  }
+
+  if (user.isAnonymous) {
+    return sendError(res, 'forbidden-anonymous');
+  }
+
+  const totpSecret = authenticator.generateSecret(32);
   const otpAuth = authenticator.keyuri(
     userId,
     ENV.AUTH_MFA_TOTP_ISSUER,

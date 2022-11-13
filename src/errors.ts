@@ -1,7 +1,6 @@
-import { NextFunction, Response, Request } from 'express';
+import { Response, Request, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
 
-import { logger } from './logger';
 import { generateRedirectUrl } from './utils';
 
 /**
@@ -12,11 +11,10 @@ export async function serverErrors(
   error: Error,
   _req: Request,
   res: Response,
+  // * See: https://stackoverflow.com/a/61464426
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  next: NextFunction
+  _next: NextFunction
 ): Promise<unknown> {
-  logger.error(error.message);
-
   if (process.env.NODE_ENV === 'production') {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send();
   } else {
@@ -80,6 +78,14 @@ export const ERRORS = asErrors({
     status: StatusCodes.UNAUTHORIZED,
     message: 'Invalid or expired verification ticket',
   },
+  'invalid-webauthn-security-key': {
+    status: StatusCodes.UNAUTHORIZED,
+    message: 'Invalid WebAuthn security key',
+  },
+  'invalid-webauthn-verification': {
+    status: StatusCodes.UNAUTHORIZED,
+    message: 'Invalid WebAuthn verification',
+  },
   'unverified-user': {
     status: StatusCodes.UNAUTHORIZED,
     message: 'Email is not verified',
@@ -108,6 +114,10 @@ export const ERRORS = asErrors({
     status: StatusCodes.BAD_REQUEST,
     message: 'Logged in user is not anonymous',
   },
+  'forbidden-anonymous': {
+    status: StatusCodes.FORBIDDEN,
+    message: 'Anonymous users cannot access this endpoint',
+  },
   'invalid-refresh-token': {
     status: StatusCodes.UNAUTHORIZED,
     message: 'Invalid or expired refresh token',
@@ -132,6 +142,18 @@ export const ERRORS = asErrors({
     status: StatusCodes.BAD_REQUEST,
     message: 'Incorrect sign in method',
   },
+  'cannot-send-sms': {
+    status: StatusCodes.INTERNAL_SERVER_ERROR,
+    message: 'Error sending SMS',
+  },
+  'invalid-sms-provider-type': {
+    status: StatusCodes.INTERNAL_SERVER_ERROR,
+    message: 'Absent or invalid SMS provider type',
+  },
+  'internal-error': {
+    status: StatusCodes.INTERNAL_SERVER_ERROR,
+    message: 'Internal server error',
+  },
 });
 
 export const sendError = (
@@ -140,13 +162,14 @@ export const sendError = (
   {
     customMessage,
     redirectTo,
-  }: { customMessage?: string; redirectTo?: string } = {}
+  }: { customMessage?: string; redirectTo?: string } = {},
+  forwardRedirection?: boolean
 ) => {
   const error = ERRORS[code];
   const message = customMessage ?? error.message;
   const status = error.status;
 
-  if (redirectTo) {
+  if (forwardRedirection && redirectTo) {
     const redirectUrl = generateRedirectUrl(redirectTo, {
       error: code,
       errorDescription: message,
@@ -155,4 +178,19 @@ export const sendError = (
   }
 
   return res.status(status).send({ status, message, error: code });
+};
+
+export const sendUnspecifiedError = (res: Response, e: unknown) => {
+  const error = e as Error;
+  if (error.message in ERRORS) {
+    return sendError(res, error.message as keyof typeof ERRORS);
+  } else {
+    return sendError(
+      res,
+      'internal-error',
+      process.env.NODE_ENV !== 'production'
+        ? { customMessage: error.message }
+        : undefined
+    );
+  }
 };

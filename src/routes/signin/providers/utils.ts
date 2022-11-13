@@ -13,9 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { PROVIDERS } from '@config';
 import {
-  Joi,
   email as emailValidator,
-  uuid,
   queryValidator,
   registrationOptions,
 } from '@/validation';
@@ -28,22 +26,29 @@ import {
   insertUser,
   getGravatarUrl,
   ENV,
+  generateRedirectUrl,
 } from '@/utils';
-import { UserRegistrationOptions } from '@/types';
-
-export const providerCallbackQuerySchema = Joi.object({
-  state: uuid.required(),
-}).unknown(true);
-
-type ProviderQuery = UserRegistrationOptions & {
-  redirectTo: string;
-};
+import {
+  SocialProvider,
+  UserRegistrationOptions,
+  UserRegistrationOptionsWithRedirect,
+} from '@/types';
+import { decodeJwt, JWTPayload } from 'jose';
 
 type ProviderCallbackQuery = Record<string, unknown> & {
   state: string;
+  error?: string;
+  error_code?: number;
+  error_description?: string;
+  error_reason?: string;
 };
 
-type RequestWithState<Q = {}> = Request<{}, {}, {}, Q & { state: string }> & {
+type RequestWithState<Q = {}, B = {}> = Request<
+  {},
+  {},
+  B,
+  Q & { state: string }
+> & {
   state: string;
 };
 
@@ -137,7 +142,12 @@ const manageProviderStrategy =
       }
     }
 
-    const { defaultRole, locale, allowedRoles, metadata } = requestOptions;
+    const {
+      defaultRole,
+      locale,
+      allowedRoles,
+      metadata,
+    }: UserRegistrationOptions = requestOptions;
 
     const insertedUser = await insertUser({
       email,
@@ -146,7 +156,7 @@ const manageProviderStrategy =
       defaultRole,
       locale,
       roles: {
-        data: (allowedRoles as string[]).map((role) => ({
+        data: allowedRoles.map((role) => ({
           role,
         })),
       },
@@ -168,48 +178,9 @@ const manageProviderStrategy =
     return done(null, insertedUser);
   };
 
-const providerCallback = asyncWrapper(
-  async (req: RequestWithState, res: Response): Promise<void> => {
-    // Successful authentication, redirect home.
-    // generate tokens and redirect back home
-
-    req.state = req.query.state as string;
-
-    const requestOptions = await gqlSdk
-      .deleteProviderRequest({
-        id: req.state,
-      })
-      .then((res) => res.deleteAuthProviderRequest?.options);
-
-    const user = req.user as UserFieldsFragment;
-
-    const refreshToken = await getNewRefreshToken(user.id);
-
-    // redirect back user to app url
-    // ! temparily send the refresh token in both hash and query parameter
-    // TODO at a later stage, only send as a query parameter
-    res.redirect(
-      `${requestOptions.redirectTo}?refreshToken=${refreshToken}#refreshToken=${refreshToken}`
-    );
-  }
-);
-
 export const initProvider = <T extends Strategy>(
   router: Router,
-  strategyName:
-    | 'github'
-    | 'google'
-    | 'facebook'
-    | 'twitter'
-    | 'linkedin'
-    | 'apple'
-    | 'windowslive'
-    | 'spotify'
-    | 'gitlab'
-    | 'bitbucket'
-    | 'strava'
-    | 'discord'
-    | 'twitch',
+  strategyName: SocialProvider,
   strategy: Constructable<T>,
   settings: InitProviderSettings & ConstructorParameters<Constructable<T>>[0], // TODO: Strategy option type is not inferred correctly
   middleware?: RequestHandler
@@ -242,26 +213,190 @@ export const initProvider = <T extends Strategy>(
   }
 
   if (PROVIDERS[strategyName]) {
-    const strategyToUse = new strategy(
-      {
-        ...PROVIDERS[strategyName],
-        ...options,
-        callbackURL: `${ENV.AUTH_SERVER_URL}/signin/provider/${strategyName}/callback`,
-        passReqToCallback: true,
-      },
-      manageProviderStrategy(strategyName, transformProfile)
-    );
+    let strategyToUse;
+
+    // Apple and Azure AD are special
+    if (strategyName === 'apple' || strategyName === 'azuread') {
+      strategyToUse = new strategy(
+        {
+          ...PROVIDERS[strategyName],
+          ...options,
+          callbackURL: `${ENV.AUTH_SERVER_URL}/signin/provider/${strategyName}/callback`,
+          passReqToCallback: true,
+        },
+        async (
+          req: RequestWithState<ProviderCallbackQuery, { user: string }>,
+          accessToken: string,
+          refreshToken: string,
+          params: unknown,
+          _profile: unknown,
+          done: VerifyCallback
+        ) => {
+          const provider = strategyName;
+          const state = req.query.state;
+
+          let id;
+          let email;
+          let emailVerified;
+          let displayName;
+          if (strategyName === 'apple') {
+            const decodedJwt: JWTPayload & {
+              sub?: string;
+              email?: string;
+              email_verified?: boolean;
+            } = decodeJwt(params as string);
+            id = decodedJwt.sub;
+            email = decodedJwt.email;
+            emailVerified = decodedJwt.email_verified;
+          } else if (strategyName === 'azuread') {
+            const decodedJwt: JWTPayload & {
+              oid?: string;
+              upn?: string;
+              name?: string;
+            } = decodeJwt((params as { id_token: string }).id_token);
+            id = decodedJwt.oid;
+            email = decodedJwt.upn;
+            emailVerified = !!email;
+            displayName = decodedJwt.name;
+          } else {
+            throw new Error(`Unsupported strategy "${strategyName}"`);
+          }
+
+          if (!id) {
+            return done(new Error('no id found in the JWT'));
+          }
+
+          const requestOptions = await gqlSdk
+            .providerRequest({
+              id: state,
+            })
+            .then((res) => res.authProviderRequest?.options);
+
+          // check if user already exist with `id` (unique id from provider)
+          const userProvider = await gqlSdk
+            .authUserProviders({
+              provider,
+              providerUserId: id.toString(),
+            })
+            .then((res) => {
+              return res.authUserProviders[0];
+            });
+
+          // User is already registered
+          if (userProvider) {
+            await gqlSdk.updateAuthUserprovider({
+              id: userProvider.id,
+              authUserProvider: {
+                accessToken,
+                refreshToken,
+              },
+            });
+
+            return done(null, userProvider.user);
+          }
+
+          if (email) {
+            try {
+              await emailValidator.validateAsync(email);
+            } catch {
+              return done(new Error('email is not allowed'));
+            }
+
+            const user = await getUserByEmail(email);
+
+            if (user) {
+              // add this provider to existing user with the same email
+              const insertedAuthUserprovider = await gqlSdk
+                .insertUserProviderToUser({
+                  userProvider: {
+                    userId: user.id,
+                    providerId: provider,
+                    providerUserId: id.toString(),
+                    accessToken,
+                    refreshToken,
+                  },
+                })
+                .then((res) => res.insertAuthUserProvider);
+
+              if (!insertedAuthUserprovider) {
+                throw new Error('Could not insert provider to user');
+              }
+
+              return done(null, user);
+            }
+          }
+
+          const {
+            defaultRole,
+            locale,
+            allowedRoles,
+            metadata,
+          }: UserRegistrationOptions = requestOptions;
+
+          // get user from request
+          let user;
+          try {
+            user = JSON.parse(req.body.user);
+            displayName = `${user.name.firstName} ${user.name.lastName}`;
+          } catch (error) {
+            // noop
+          }
+
+          const insertedUser = await insertUser({
+            email,
+            passwordHash: null,
+            emailVerified,
+            defaultRole,
+            locale,
+            roles: {
+              data: allowedRoles.map((role) => ({
+                role,
+              })),
+            },
+            displayName: requestOptions.displayName || displayName || email,
+            avatarUrl: '',
+            metadata,
+            userProviders: {
+              data: [
+                {
+                  providerUserId: id.toString(),
+                  accessToken,
+                  refreshToken,
+                  providerId: provider,
+                },
+              ],
+            },
+          });
+
+          done(null, insertedUser);
+        }
+      );
+    } else {
+      strategyToUse = new strategy(
+        {
+          ...PROVIDERS[strategyName],
+          ...options,
+          callbackURL: `${ENV.AUTH_SERVER_URL}/signin/provider/${strategyName}/callback`,
+          passReqToCallback: true,
+        },
+        manageProviderStrategy(strategyName, transformProfile)
+      );
+    }
 
     passport.use(strategyName, strategyToUse);
-    // @ts-expect-error
-    refresh.use(strategyToUse);
+    if (strategyName !== 'workos') {
+      // ! provider token rotation does not work with `passport-workos`.
+      // ! The only impacted endpoint is /user/provider/tokens
+      // @ts-expect-error
+      refresh.use(strategyToUse);
+    }
   }
 
   subRouter.get('/', [
     queryValidator(registrationOptions),
     asyncWrapper(
       async (
-        req: RequestWithState<ProviderQuery>,
+        req: RequestWithState<UserRegistrationOptionsWithRedirect>,
         res: Response,
         next: NextFunction
       ) => {
@@ -277,8 +412,10 @@ export const initProvider = <T extends Strategy>(
         next();
       }
     ),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (req: RequestWithState<ProviderQuery>, ...rest: any) => {
+    (
+      req: RequestWithState<UserRegistrationOptionsWithRedirect>,
+      ...rest: unknown[]
+    ) => {
       return passport.authenticate(strategyName, {
         session: false,
         state: req.state,
@@ -287,23 +424,46 @@ export const initProvider = <T extends Strategy>(
     },
   ]);
 
-  const handlers = [
-    passport.authenticate(strategyName, {
-      session: false,
-    }),
-    queryValidator(providerCallbackQuerySchema),
-    providerCallback,
-  ];
+  const callbackHandler = asyncWrapper(
+    async (req: RequestWithState<ProviderCallbackQuery>, res: Response) =>
+      passport.authenticate(
+        strategyName,
+        { session: true },
+        async (_, user: UserFieldsFragment) => {
+          const { state, error_description, error } = req.query;
+          const redirectTo: string = await gqlSdk
+            .deleteProviderRequest({ id: state })
+            .then((res) => res.deleteAuthProviderRequest?.options.redirectTo);
+
+          if (user?.id) {
+            const refreshToken = await getNewRefreshToken(user.id);
+            // * redirect back user to app url
+            // ! temparily send the refresh token in both hash and query parameter
+            // TODO at a later stage, only send as a query parameter
+            return res.redirect(
+              `${redirectTo}?refreshToken=${refreshToken}#refreshToken=${refreshToken}`
+            );
+          }
+          return res.redirect(
+            generateRedirectUrl(redirectTo, {
+              error: error || 'invalid-request',
+              provider: strategyName,
+              errorDescription: error_description || 'OAuth request cancelled',
+            })
+          );
+        }
+      )(req, res)
+  );
 
   if (callbackMethod === 'POST') {
-    // The Sign in with Apple auth provider requires a POST route for authentication
+    // The Sign in with Apple and Azure AD auth providers require a POST route for authentication
     subRouter.post(
       '/callback',
       express.urlencoded({ extended: true }),
-      ...handlers
+      callbackHandler
     );
   } else {
-    subRouter.get('/callback', ...handlers);
+    subRouter.get('/callback', callbackHandler);
   }
 
   router.use(`/${strategyName}`, subRouter);

@@ -2,7 +2,7 @@ import { RequestHandler } from 'express';
 import twilio from 'twilio';
 import { ReasonPhrases } from 'http-status-codes';
 
-import { PasswordLessSmsBody } from '@/types';
+import { UserRegistrationOptions } from '@/types';
 import {
   gqlSdk,
   getNewOneTimePasswordData,
@@ -11,18 +11,26 @@ import {
   ENV,
 } from '@/utils';
 import { sendError } from '@/errors';
-import { Joi, registrationOptions } from '@/validation';
+import { Joi, phoneNumber, registrationOptions } from '@/validation';
 import { isVerifySid } from '@/utils/twilio';
+import { logger } from '@/logger';
+import { renderTemplate } from '@/templates';
 
-export const signInPasswordlessSmsSchema = Joi.object({
-  phoneNumber: Joi.string().required(),
-  options: registrationOptions,
-}).meta({ className: 'SignInPasswordlessSmsSchema' });
+export type PasswordLessSmsRequestBody = {
+  phoneNumber: string;
+  options: UserRegistrationOptions;
+};
+
+export const signInPasswordlessSmsSchema =
+  Joi.object<PasswordLessSmsRequestBody>({
+    phoneNumber,
+    options: registrationOptions,
+  }).meta({ className: 'SignInPasswordlessSmsSchema' });
 
 export const signInPasswordlessSmsHandler: RequestHandler<
   {},
   {},
-  PasswordLessSmsBody
+  PasswordLessSmsRequestBody
 > = async (req, res) => {
   if (!ENV.AUTH_SMS_PASSWORDLESS_ENABLED) {
     return sendError(res, 'disabled-endpoint');
@@ -90,23 +98,31 @@ export const signInPasswordlessSmsHandler: RequestHandler<
           to: phoneNumber,
         });
     } else {
+      const template = 'signin-passwordless-sms';
+      const message = await renderTemplate(`${template}/text`, {
+        locale: user.locale ?? ENV.AUTH_LOCALE_DEFAULT,
+        displayName: user.displayName,
+        code: otp,
+      });
+
       await twilioClient.messages.create({
-        body: `Your code is ${otp}`,
-        messagingServiceSid: ENV.AUTH_SMS_TWILIO_MESSAGING_SERVICE_ID,
-        from: ENV.AUTH_SMS_TWILIO_FROM,
+        body: message ?? `Your code is ${otp}`,
+        from: ENV.AUTH_SMS_TWILIO_MESSAGING_SERVICE_ID,
         to: phoneNumber,
       });
     }
-  } catch (error) {
+  } catch (error: any) {
+    logger.error('Error sending sms');
+    logger.error(error);
+
     // delete user that was inserted because we were not able to send the SMS
     if (!userExists) {
       await gqlSdk.deleteUser({
         userId: user.id,
       });
     }
-
-    throw Error('Error sending SMS');
+    return sendError(res, 'cannot-send-sms');
   }
 
-  return res.send(ReasonPhrases.OK);
+  return res.json(ReasonPhrases.OK);
 };

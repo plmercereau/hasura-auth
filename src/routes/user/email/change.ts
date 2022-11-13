@@ -7,10 +7,12 @@ import {
   generateTicketExpiresAt,
   ENV,
   createEmailRedirectionLink,
+  getUserByEmail,
 } from '@/utils';
 import { emailClient } from '@/email';
 import { Joi, email, redirectTo } from '@/validation';
 import { EMAIL_TYPES } from '@/types';
+import { sendError } from '@/errors';
 
 export const userEmailChangeSchema = Joi.object({
   newEmail: email,
@@ -39,6 +41,11 @@ export const userEmailChange: RequestHandler<
   const ticket = `${EMAIL_TYPES.CONFIRM_CHANGE}:${uuidv4()}`;
   const ticketExpiresAt = generateTicketExpiresAt(60 * 60); // 1 hour
 
+  // * Send an error if the new email is already used by another user
+  if (await getUserByEmail(newEmail)) {
+    return sendError(res, 'email-already-in-use');
+  }
+
   // set newEmail for user
   const updatedUserResponse = await gqlSdk.updateUser({
     id: userId,
@@ -52,7 +59,11 @@ export const userEmailChange: RequestHandler<
   const user = updatedUserResponse.updateUser;
 
   if (!user) {
-    throw new Error('Unable to get user');
+    return sendError(res, 'user-not-found');
+  }
+
+  if (user.isAnonymous) {
+    return sendError(res, 'forbidden-anonymous');
   }
 
   const template = 'email-confirm-change';
@@ -66,6 +77,8 @@ export const userEmailChange: RequestHandler<
     locals: {
       link,
       displayName: user.displayName,
+      email: user.email,
+      newEmail,
       ticket,
       redirectTo: encodeURIComponent(redirectTo),
       locale: user.locale ?? ENV.AUTH_LOCALE_DEFAULT,
@@ -95,5 +108,5 @@ export const userEmailChange: RequestHandler<
     },
   });
 
-  return res.send(ReasonPhrases.OK);
+  return res.json(ReasonPhrases.OK);
 };
