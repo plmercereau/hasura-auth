@@ -38,7 +38,7 @@ jobs:
   publish:
     needs: version
     uses: nhost/hasura-auth/.github/workflows/publish.yml@main
-    if: jobs.version.steps.changesets.outputs.hasChangesets == 'false'
+    if: "{{ jobs.version.steps.changesets.outputs.hasChangesets == 'false' }}"
 
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
