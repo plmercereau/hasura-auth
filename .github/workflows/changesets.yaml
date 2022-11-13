@@ -15,6 +15,7 @@ on:
 jobs:
   test:
     uses: nhost/hasura-auth/.github/workflows/test.yml@main
+
   version:
     needs: test
     runs-on: ubuntu-latest
@@ -37,8 +38,8 @@ jobs:
 
   publish:
     needs: version
+    if: needs.version.steps.changesets.outputs.hasChangesets == 'false'
     uses: nhost/hasura-auth/.github/workflows/publish.yml@main
-    if: "{{ jobs.version.steps.changesets.outputs.hasChangesets == 'false' }}"
 
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
