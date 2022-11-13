@@ -1,5 +1,11 @@
 ## [0.15.0](https://github.com/nhost/hasura-auth/compare/v0.14.0...v0.15.0) (2022-10-18)
 
+## 0.15.1
+
+### Patch Changes
+
+- 84669e2: a test
+
 ### Bug Fixes
 
 - 🐛 capture unhandled errors ([c1f82c4](https://github.com/nhost/hasura-auth/commit/c1f82c45034aa396b9626a57afde89bd54b04564))
