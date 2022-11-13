@@ -1,4 +1,4 @@
-# [0.15.0](https://github.com/nhost/hasura-auth/compare/v0.14.0...v0.15.0) (2022-10-18)
+## [0.15.0](https://github.com/nhost/hasura-auth/compare/v0.14.0...v0.15.0) (2022-10-18)
 
 ### Bug Fixes
 
