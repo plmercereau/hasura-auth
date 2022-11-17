@@ -61,7 +61,7 @@ jobs:
           git tag $tag 2>/dev/null && (git push origin --tags ; echo "version=$version" >> $GITHUB_OUTPUT) || true
   publish:
     needs: version
-    if: needs.version.outputs.hasChangesets == 'false' && needs.version.outputs.version != ''
+    if: needs.version.outputs.hasChangesets == 'false' && needs.version.outputs.version
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
