@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
-      version: ${{ steps.tag.outputs.version }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -56,12 +56,11 @@ jobs:
         id: tag
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: |
-          version=$(jq -r .version package.json)
-          tag="v$version"
-          git tag $tag 2>/dev/null && (git push origin --tags ; echo "version=$version" >> $GITHUB_OUTPUT) || true
+          tag=v$(jq -r .version package.json)
+          git tag $tag 2>/dev/null && (git push origin --tags ; echo "tag=$tag" >> $GITHUB_OUTPUT) || true
   publish:
     needs: version
-    if: needs.version.outputs.hasChangesets == 'false' && needs.version.outputs.version != ''
+    if: needs.version.outputs.hasChangesets == 'false' && needs.version.outputs.tag != ''
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
@@ -76,7 +75,7 @@ jobs:
         with:
           changelog: CHANGELOG.md
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/tags/v${{ needs.version.outputs.version }}
+          ref: refs/tags/${{ needs.version.outputs.tag }}
       - name: Preprocess environment
         id: preprocess-environment
         run: echo "::set-output name=aws_account_id::${{ secrets.AWS_PRODUCTION_ACCOUNT_ID }}"
@@ -92,9 +91,9 @@ jobs:
           tags: |
             type=schedule
             type=raw,value=latest,enable=true
-            type=semver,pattern={{version}},value=${{ needs.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ needs.version.outputs.version }}
+            type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ needs.version.outputs.tag }}
             type=sha
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
