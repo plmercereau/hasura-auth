@@ -62,14 +62,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  test:
-    name: Run tests
-    uses: ./.github/workflows/test.yaml
+  # test:
+  #   name: Run tests
+  #   uses: ./.github/workflows/test.yaml
 
   publish:
     name: Publish image & GitHub release
     needs:
-      - test
+      # - test
       - build
       - version
     timeout-minutes: 60
@@ -92,6 +92,7 @@ jobs:
         # 2. add the corresponding docker tags to the output
         # 3. add the corresponding git tag to the output
         id: tags
+        shell: bash {0}
         run: |
           CURRENT_VERSION=$(jq -r .version package.json)
           GIT_TAG="v$CURRENT_VERSION"
