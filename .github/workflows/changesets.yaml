@@ -131,7 +131,6 @@ jobs:
           images: |
             nhost/hasura-auth
             ${{ steps.preprocess-environment.outputs.aws_account_id }}.dkr.ecr.eu-central-1.amazonaws.com/hasura-auth
-          # generate Docker tags based on the following events/attributes
           tags: ${{ steps.tags.outputs.docker_tags }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
