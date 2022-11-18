@@ -103,22 +103,22 @@ jobs:
       - name: Determine tags
         id: tags
         run: |
-          latestTag=v$(jq -r .version package.json)
+          CURRENT_VERSION=$(jq -r .version package.json)
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo "type=sha" >> $GITHUB_OUTPUT
           echo "type=raw,value=latest,enable=true" >> $GITHUB_OUTPUT
           if [ "steps.changesets.outputs.hasChangesets" = "false" ]; then
-            git tag $latestTag 2>/dev/null && tagged="OK" || true
-            if [ -n "$tagged" ]; then
+            TAGGED=$(git tag $CURRENT_VERSION 2>/dev/null && echo "yes" || true)
+            if [ "$TAGGED" = "yes" ]; then
               git push origin --tags
-              echo "type=semver,pattern={{version}},value=$latestTag" >> $GITHUB_OUTPUT
-              echo "type=semver,pattern={{major}}.{{minor}},value=$latestTag" >> $GITHUB_OUTPUT
-              echo "type=semver,pattern={{major}},value=$latestTag" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{version}},value=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{major}}.{{minor}},value=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{major}},value=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
             fi
           fi
           echo 'EOF' >> $GITHUB_OUTPUT
-          if [ -n "$tagged" ]; then
-            echo "tag=$latestTag" >> $GITHUB_OUTPUT
+          if [ "$tagged" = "yes" ]; then
+            echo "tag=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           fi
       - name: Docker meta
         id: meta
