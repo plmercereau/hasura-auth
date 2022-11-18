@@ -95,6 +95,7 @@ jobs:
         # 3. add the corresponding git tag to the output
         id: tags
         run: |
+          set +x
           CURRENT_VERSION=$(jq -r .version package.json)
           GIT_TAG="v$CURRENT_VERSION"
           echo "docker_tags<<EOF" >> $GITHUB_OUTPUT
