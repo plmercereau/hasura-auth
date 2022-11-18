@@ -78,9 +78,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # test:
+  #   needs: version
+  #   uses: ./.github/workflows/test.yaml
+
   publish:
     name: Publish Image & GitHub release
-    needs: build
+    needs:
+      # - test
+      - build
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
@@ -97,22 +103,24 @@ jobs:
       - name: Determine tags
         id: tags
         run: |
-          latestTag=v$(jq -r .version package.json)
-          tags="type=sha\ntype=raw,value=latest,enable=true\n"
+          latestTag=v$(jq -r .version package.json
+          tmp="$(mktemp -d)/tmp"
+          echo "type=sha" > $tmp
+          echo "type=raw,value=latest,enable=true" >> $tmp
           if [ "steps.changesets.outputs.hasChangesets" = "false"]; then
             git tag $tag 2>/dev/null && (git push origin --tags ; tagged="OK" >> $GITHUB_OUTPUT) || true
             if [ -n "$tagged" ]; then
-              tags="${tags}type=semver,pattern={{version}},value=$latestTag\n"
-              tags="${tags}type=semver,pattern={{major}}.{{minor}},,value=$latestTag\n"
-              tags="${tags}type=semver,pattern={{major}},value=$latestTag\n"
+              echo "${tags}type=semver,pattern={{version}},value=$latestTag" >> $tmp
+              echo "${tags}type=semver,pattern={{major}}.{{minor}},,value=$latestTag\ >> $tmp
+              echo "${tags}type=semver,pattern={{major}},value=$latestTag" >> $tmp
               echo "tag=tag" >> $GITHUB_OUTPUT
             fi
           fi
-          tags=$(echo -e "$tags")
+          tags=$(cat $tmp)
           tags="${tags//'%'/'%25'}"
           tags="${tags//$'\n'/'%0A'}"
           tags="${tags//$'\r'/'%0D'}"
-          echo "TAGS: $tags"
+          # echo "TAGS: $tags"
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Docker meta
         id: meta

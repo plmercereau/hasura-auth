@@ -1,12 +1,6 @@
 name: Test
 on:
-  push:
-    branches: [main]
-    paths:
-      - '**'
-      - '!docs/**'
-      - '!examples/**'
-      - '!*.md'
+  workflow_call:
   pull_request:
     branches: [main]
     paths:
