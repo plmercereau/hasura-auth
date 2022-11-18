@@ -78,14 +78,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # test:
-  #   needs: version
-  #   uses: ./.github/workflows/test.yaml
+  test:
+    uses: ./.github/workflows/test.yaml
 
   publish:
     name: Publish Image & GitHub release
     needs:
-      # - test
+      - test
       - build
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -112,7 +111,7 @@ jobs:
             if [ -n "$tagged" ]; then
               git push origin --tags
               echo "type=semver,pattern={{version}},value=$latestTag" >> $GITHUB_OUTPUT
-              echo "type=semver,pattern={{major}}.{{minor}},,value=$latestTag" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{major}}.{{minor}},value=$latestTag" >> $GITHUB_OUTPUT
               echo "type=semver,pattern={{major}},value=$latestTag" >> $GITHUB_OUTPUT
             fi
           fi
