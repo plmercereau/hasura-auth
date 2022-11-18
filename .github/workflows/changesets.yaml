@@ -100,25 +100,28 @@ jobs:
       - name: Preprocess environment
         id: preprocess-environment
         run: echo "::set-output name=aws_account_id::${{ secrets.AWS_PRODUCTION_ACCOUNT_ID }}"
+        # TODO
+        # run: echo "aws_account_id=${{ secrets.AWS_PRODUCTION_ACCOUNT_ID }}" >> $GITHUB_OUTPUT
       - name: Determine tags
         id: tags
         run: |
           CURRENT_VERSION=$(jq -r .version package.json)
-          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          GIT_TAG=v${CURRENT_VERSION}
+          echo "docker_tags<<EOF" >> $GITHUB_OUTPUT
           echo "type=sha" >> $GITHUB_OUTPUT
           echo "type=raw,value=latest,enable=true" >> $GITHUB_OUTPUT
-          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ]; then
-            git tag v$CURRENT_VERSION 2>/dev/null && TAGGED="yes" || true
+          if [ "${{ needs.version.outputs.hasChangesets }}" = "false" ]; then
+            git tag $GIT_TAG 2>/dev/null && TAGGED="yes" || true
             if [ "$TAGGED" = "yes" ]; then
               git push origin --tags
-              echo "type=semver,pattern={{version}},value=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
-              echo "type=semver,pattern={{major}}.{{minor}},value=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
-              echo "type=semver,pattern={{major}},value=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{version}},value=$GIT_TAG" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{major}}.{{minor}},value=$GIT_TAG" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{major}},value=$GIT_TAG" >> $GITHUB_OUTPUT
             fi
           fi
           echo 'EOF' >> $GITHUB_OUTPUT
-          if [ "$tagged" = "yes" ]; then
-            echo "tag=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          if [ "$TAGGED" = "yes" ]; then
+            echo "git_tag=$GIT_TAG" >> $GITHUB_OUTPUT
           fi
       - name: Docker meta
         id: meta
@@ -129,7 +132,7 @@ jobs:
             nhost/hasura-auth
             ${{ steps.preprocess-environment.outputs.aws_account_id }}.dkr.ecr.eu-central-1.amazonaws.com/hasura-auth
           # generate Docker tags based on the following events/attributes
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: ${{ steps.tags.outputs.docker_tags }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
@@ -153,16 +156,16 @@ jobs:
           # TODO: use cache https://github.com/docker/build-push-action/blob/master/docs/advanced/cache.md
           context: .
           platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.docker_tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
       - name: Create GitHub Release
         uses: taiki-e/create-gh-release-action@v1
-        if: steps.tags.outputs.new == 'true'
+        if: steps.tags.outputs.git_tag != ''
         with:
           changelog: CHANGELOG.md
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/tags/${{ steps.tags.outputs.tag }}
+          ref: refs/tags/${{ steps.tags.outputs.git_tag }}
       - name: Remove tag
-        if: failure() && steps.tags.outputs.tags
-        run: git push --delete origin ${{ steps.tags.outputs.tag }}
+        if: failure() && steps.tags.outputs.git_tag != ''
+        run: git push --delete origin ${{ steps.tags.outputs.git_tag }}
