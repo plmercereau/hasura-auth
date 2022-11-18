@@ -79,7 +79,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   test:
-    name: Tests
+    name: Run tests
     uses: ./.github/workflows/test.yaml
 
   publish:
@@ -107,7 +107,7 @@ jobs:
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo "type=sha" >> $GITHUB_OUTPUT
           echo "type=raw,value=latest,enable=true" >> $GITHUB_OUTPUT
-          if [ "steps.changesets.outputs.hasChangesets" = "false" ]; then
+          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ]; then
             git tag v$CURRENT_VERSION 2>/dev/null && TAGGED="yes" || true
             if [ "$TAGGED" = "yes" ]; then
               git push origin --tags
