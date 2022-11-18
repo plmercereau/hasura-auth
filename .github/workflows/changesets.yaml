@@ -108,7 +108,7 @@ jobs:
           echo "type=sha" >> $GITHUB_OUTPUT
           echo "type=raw,value=latest,enable=true" >> $GITHUB_OUTPUT
           if [ "steps.changesets.outputs.hasChangesets" = "false" ]; then
-            git tag $CURRENT_VERSION 2>/dev/null && TAGGED="yes" || true
+            git tag v$CURRENT_VERSION 2>/dev/null && TAGGED="yes" || true
             if [ "$TAGGED" = "yes" ]; then
               git push origin --tags
               echo "type=semver,pattern={{version}},value=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
