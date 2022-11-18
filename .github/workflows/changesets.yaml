@@ -58,6 +58,13 @@ jobs:
         run: |
           tag=v$(jq -r .version package.json)
           git tag $tag 2>/dev/null && (git push origin --tags ; echo "tag=$tag" >> $GITHUB_OUTPUT) || true
+      - name: Create GitHub Release
+        uses: taiki-e/create-gh-release-action@v1
+        if: steps.tag.outputs.tag != ''
+        with:
+          changelog: CHANGELOG.md
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: refs/tags/${{ needs.version.outputs.tag }}
 
   build:
     needs: version
@@ -85,7 +92,6 @@ jobs:
 
   publish:
     needs: build
-    if: needs.version.outputs.tag != ''
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
@@ -96,14 +102,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - uses: taiki-e/create-gh-release-action@v1
-        with:
-          changelog: CHANGELOG.md
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/tags/${{ needs.version.outputs.tag }}
       - name: Preprocess environment
         id: preprocess-environment
         run: echo "::set-output name=aws_account_id::${{ secrets.AWS_PRODUCTION_ACCOUNT_ID }}"
+      - name: Determine tags
+        id: tags
+        run: |
+          tags="type=raw,value=latest,enable=true\ntype=sha\n"
+          version="${{ needs.version.outputs.tag }}"
+          if [ -n "$version" ]; then
+            tags="${tags}type=semver,pattern={{version}},value=$version\n"
+            tags="${tags}type=semver,pattern={{major}}.{{minor}},,value=$version\n"
+            tags="${tags}type=semver,pattern={{major}},value=$version\n"
+          fi
+          tags=$(echo -e "$tags")
+          echo "TAGS: $tags"
+          echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v4
@@ -113,13 +127,7 @@ jobs:
             nhost/hasura-auth
             ${{ steps.preprocess-environment.outputs.aws_account_id }}.dkr.ecr.eu-central-1.amazonaws.com/hasura-auth
           # generate Docker tags based on the following events/attributes
-          tags: |
-            type=schedule
-            type=raw,value=latest,enable=true
-            type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.tag }}
-            type=semver,pattern={{major}},value=${{ needs.version.outputs.tag }}
-            type=sha
+          tags: ${{ steps.tags.outputs.tags }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
       - name: Set up Docker Buildx
