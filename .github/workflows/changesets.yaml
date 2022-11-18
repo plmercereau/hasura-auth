@@ -108,7 +108,7 @@ jobs:
               echo "new=true" >> $GITHUB_OUTPUT
             fi
           fi
-          tags=$(echo -e "$tags")
+          # tags=$(echo -e "$tags")
           echo "TAGS: $tags"
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Docker meta
