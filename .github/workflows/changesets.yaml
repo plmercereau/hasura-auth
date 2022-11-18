@@ -106,10 +106,10 @@ jobs:
             echo "type=semver,pattern={{version}},value=$GIT_TAG" >> $GITHUB_OUTPUT
             echo "type=semver,pattern={{major}}.{{minor}},value=$GIT_TAG" >> $GITHUB_OUTPUT
             echo "type=semver,pattern={{major}},value=$GIT_TAG" >> $GITHUB_OUTPUT
-          fi
-          echo 'EOF' >> $GITHUB_OUTPUT
-          if [ "$TAGGED" = "yes" ]; then
+            echo 'EOF' >> $GITHUB_OUTPUT
             echo "git_tag=$GIT_TAG" >> $GITHUB_OUTPUT
+          else
+            echo 'EOF' >> $GITHUB_OUTPUT
           fi
       - name: Docker meta
         id: meta
