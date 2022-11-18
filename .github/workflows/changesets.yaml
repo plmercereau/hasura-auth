@@ -94,21 +94,18 @@ jobs:
         # 2. add the corresponding docker tags to the output
         # 3. add the corresponding git tag to the output
         id: tags
-        shell: bash {0} # required to allow errors to be caught
         run: |
           CURRENT_VERSION=$(jq -r .version package.json)
           GIT_TAG="v$CURRENT_VERSION"
           echo "docker_tags<<EOF" >> $GITHUB_OUTPUT
           echo "type=sha" >> $GITHUB_OUTPUT
           echo "type=raw,value=latest,enable=true" >> $GITHUB_OUTPUT
-          if [ "${{ needs.version.outputs.hasChangesets }}" = "false" ]; then
-            git tag $GIT_TAG 2>/dev/null && TAGGED="yes" || true
-            if [ "$TAGGED" = "yes" ]; then
-              git push origin --tags
-              echo "type=semver,pattern={{version}},value=$GIT_TAG" >> $GITHUB_OUTPUT
-              echo "type=semver,pattern={{major}}.{{minor}},value=$GIT_TAG" >> $GITHUB_OUTPUT
-              echo "type=semver,pattern={{major}},value=$GIT_TAG" >> $GITHUB_OUTPUT
-            fi
+          if [ "${{ needs.version.outputs.hasChangesets }}" = "false" ] && [ ! $(git tag -l "$GIT_TAG") ]; then
+            git tag $GIT_TAG
+            git push origin --tags
+            echo "type=semver,pattern={{version}},value=$GIT_TAG" >> $GITHUB_OUTPUT
+            echo "type=semver,pattern={{major}}.{{minor}},value=$GIT_TAG" >> $GITHUB_OUTPUT
+            echo "type=semver,pattern={{major}},value=$GIT_TAG" >> $GITHUB_OUTPUT
           fi
           echo 'EOF' >> $GITHUB_OUTPUT
           if [ "$TAGGED" = "yes" ]; then
