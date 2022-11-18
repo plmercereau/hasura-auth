@@ -11,10 +11,10 @@ on:
 
 jobs:
   version:
+    name: Determine version
     runs-on: ubuntu-latest
     outputs:
       hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
-      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -79,7 +79,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   publish:
-    name: Publish Docker image and GitHub release
+    name: Publish Image & GitHub release
     needs: build
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -105,10 +105,10 @@ jobs:
               tags="${tags}type=semver,pattern={{version}},value=$latestTag\n"
               tags="${tags}type=semver,pattern={{major}}.{{minor}},,value=$latestTag\n"
               tags="${tags}type=semver,pattern={{major}},value=$latestTag\n"
-              echo "new=true" >> $GITHUB_OUTPUT
+              echo "tag=tag" >> $GITHUB_OUTPUT
             fi
           fi
-          # tags=$(echo -e "$tags")
+          tags=$(echo -e "$tags")
           tags="${tags//'%'/'%25'}"
           tags="${tags//$'\n'/'%0A'}"
           tags="${tags//$'\r'/'%0D'}"
@@ -156,7 +156,7 @@ jobs:
         with:
           changelog: CHANGELOG.md
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/tags/${{ needs.version.outputs.tag }}
+          ref: refs/tags/${{ steps.tags.outputs.tag }}
       - name: Remove tag
-        if: failure() && steps.tags.outputs.new == 'true'
-        run: git push --delete origin ${{ steps.tags.outputs.new }}
+        if: failure() && steps.tags.outputs.tags
+        run: git push --delete origin ${{ steps.tags.outputs.tag }}
