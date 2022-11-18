@@ -98,7 +98,7 @@ jobs:
         id: tags
         run: |
           latestTag=v$(jq -r .version package.json)
-          tags="type=raw,value=latest,enable=true\ntype=sha\n"
+          tags="type=sha\ntype=raw,value=latest,enable=true\n"
           if [ "steps.changesets.outputs.hasChangesets" = "false"]; then
             git tag $tag 2>/dev/null && (git push origin --tags ; tagged="OK" >> $GITHUB_OUTPUT) || true
             if [ -n "$tagged" ]; then
