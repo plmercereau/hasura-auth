@@ -104,24 +104,22 @@ jobs:
         id: tags
         run: |
           latestTag=v$(jq -r .version package.json
-          tmp="$(mktemp -d)/tmp"
-          echo "type=sha" > $tmp
-          echo "type=raw,value=latest,enable=true" >> $tmp
+          echo 'tags<<EOF' >> $GITHUB_OUTPUT
+          echo "type=sha" >> $GITHUB_OUTPUT
+          echo "type=raw,value=latest,enable=true" >> $GITHUB_OUTPUT
           if [ "steps.changesets.outputs.hasChangesets" = "false"]; then
-            git tag $tag 2>/dev/null && (git push origin --tags ; tagged="OK" >> $GITHUB_OUTPUT) || true
+            git tag $tag 2>/dev/null && tagged="OK" || true
             if [ -n "$tagged" ]; then
-              echo "${tags}type=semver,pattern={{version}},value=$latestTag" >> $tmp
-              echo "${tags}type=semver,pattern={{major}}.{{minor}},,value=$latestTag\ >> $tmp
-              echo "${tags}type=semver,pattern={{major}},value=$latestTag" >> $tmp
-              echo "tag=tag" >> $GITHUB_OUTPUT
+              git push origin --tags
+              echo "${tags}type=semver,pattern={{version}},value=$latestTag" >> $GITHUB_OUTPUT
+              echo "${tags}type=semver,pattern={{major}}.{{minor}},,value=$latestTag\ >> $GITHUB_OUTPUT
+              echo "${tags}type=semver,pattern={{major}},value=$latestTag" >> $GITHUB_OUTPUT
             fi
           fi
-          tags=$(cat $tmp)
-          tags="${tags//'%'/'%25'}"
-          tags="${tags//$'\n'/'%0A'}"
-          tags="${tags//$'\r'/'%0D'}"
-          # echo "TAGS: $tags"
-          echo "tags=$tags" >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+          if [ -n "$tagged" ]; then
+            echo "tag=$latestTag" >> $GITHUB_OUTPUT
+          fi
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v4
