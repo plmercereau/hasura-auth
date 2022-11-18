@@ -59,29 +59,17 @@ jobs:
       options: --hostname hasura-auth
     steps:
       - uses: actions/checkout@v2
-
-      - uses: pnpm/action-setup@v2
-        name: Install pnpm
-        id: pnpm-install
+      - name: Cache pnpm modules
+        uses: actions/cache@v2
         with:
-          version: 7.14.2
-          run_install: false
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - uses: actions/cache@v3
-        name: Setup pnpm cache
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+      - uses: pnpm/action-setup@v2.1.0
+        with:
+          version: 7.3.0
+          run_install: |
+            - args: [--frozen-lockfile]
       - name: Run Jest tests
         # env:
         #   AUTH_LOCALE_ALLOWED_LOCALES: en,fr
