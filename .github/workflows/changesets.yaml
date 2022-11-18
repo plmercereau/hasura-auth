@@ -108,12 +108,12 @@ jobs:
           echo "type=sha" >> $GITHUB_OUTPUT
           echo "type=raw,value=latest,enable=true" >> $GITHUB_OUTPUT
           if [ "steps.changesets.outputs.hasChangesets" = "false"]; then
-            git tag $tag 2>/dev/null && tagged="OK" || true
+            git tag $latestTag 2>/dev/null && tagged="OK" || true
             if [ -n "$tagged" ]; then
               git push origin --tags
-              echo "${tags}type=semver,pattern={{version}},value=$latestTag" >> $GITHUB_OUTPUT
-              echo "${tags}type=semver,pattern={{major}}.{{minor}},,value=$latestTag\ >> $GITHUB_OUTPUT
-              echo "${tags}type=semver,pattern={{major}},value=$latestTag" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{version}},value=$latestTag" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{major}}.{{minor}},,value=$latestTag" >> $GITHUB_OUTPUT
+              echo "type=semver,pattern={{major}},value=$latestTag" >> $GITHUB_OUTPUT
             fi
           fi
           echo 'EOF' >> $GITHUB_OUTPUT
