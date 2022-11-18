@@ -103,11 +103,11 @@ jobs:
       - name: Determine tags
         id: tags
         run: |
-          latestTag=v$(jq -r .version package.json
-          echo 'tags<<EOF' >> $GITHUB_OUTPUT
+          latestTag=v$(jq -r .version package.json)
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo "type=sha" >> $GITHUB_OUTPUT
           echo "type=raw,value=latest,enable=true" >> $GITHUB_OUTPUT
-          if [ "steps.changesets.outputs.hasChangesets" = "false"]; then
+          if [ "steps.changesets.outputs.hasChangesets" = "false" ]; then
             git tag $latestTag 2>/dev/null && tagged="OK" || true
             if [ -n "$tagged" ]; then
               git push origin --tags
