@@ -92,7 +92,7 @@ jobs:
         # 2. add the corresponding docker tags to the output
         # 3. add the corresponding git tag to the output
         id: tags
-        shell: bash {0}
+        # shell: bash {0}
         run: |
           CURRENT_VERSION=$(jq -r .version package.json)
           GIT_TAG="v$CURRENT_VERSION"
@@ -151,6 +151,6 @@ jobs:
           changelog: CHANGELOG.md
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: refs/tags/${{ steps.tags.outputs.git_tag }}
-      - name: Remove tag
-        if: failure() && steps.tags.outputs.git_tag != ''
-        run: git push --delete origin ${{ steps.tags.outputs.git_tag }}
+      # - name: Remove tag
+      #   if: failure() && steps.tags.outputs.git_tag != ''
+      #   run: git push --delete origin ${{ steps.tags.outputs.git_tag }}

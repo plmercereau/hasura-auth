@@ -1,13 +1,14 @@
+#!/bin/bash
+# set -e
 CURRENT_VERSION=$(jq -r .version package.json)
 GIT_TAG="v$CURRENT_VERSION"
 
 echo $GIT_TAG
 git tag -l "$GIT_TAG"
-if [ ! $(git tag -l "$GIT_TAG") ] && [ ! $(git tag -l "$GIT_TAG") ]
-then
-  echo "not in the list"
+git show-ref --tags $GIT_TAG --quiet
 
-else
-
-    echo "PRESENT"
+if [ "true"="true" ] && ! git show-ref --tags $GIT_TAG --quiet; then
+  echo "tag doesn't exist or error in command"
 fi
+
+echo end
