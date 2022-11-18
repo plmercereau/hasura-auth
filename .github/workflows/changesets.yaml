@@ -79,6 +79,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   test:
+    name: Tests
     uses: ./.github/workflows/test.yaml
 
   publish:
