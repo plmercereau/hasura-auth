@@ -83,10 +83,11 @@ jobs:
     uses: ./.github/workflows/test.yaml
 
   publish:
-    name: Publish Image & GitHub release
+    name: Publish image & GitHub release
     needs:
       - test
       - build
+      - version
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
@@ -103,6 +104,11 @@ jobs:
         # TODO
         # run: echo "aws_account_id=${{ secrets.AWS_PRODUCTION_ACCOUNT_ID }}" >> $GITHUB_OUTPUT
       - name: Determine tags
+        # Create and push a Git tag for the release it doesn't already exist.
+        # If the package version has not been released yet:
+        # 1. push the corresponding git tag
+        # 2. add the corresponding docker tags to the output
+        # 3. add the corresponding git tag to the output
         id: tags
         run: |
           CURRENT_VERSION=$(jq -r .version package.json)
