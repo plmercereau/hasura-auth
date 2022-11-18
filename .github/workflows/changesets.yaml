@@ -52,19 +52,6 @@ jobs:
           title: 'chore: update versions'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Tag
-        id: tag
-        if: steps.changesets.outputs.hasChangesets == 'false'
-        run: |
-          tag=v$(jq -r .version package.json)
-          git tag $tag 2>/dev/null && (git push origin --tags ; echo "tag=$tag" >> $GITHUB_OUTPUT) || true
-      - name: Create GitHub Release
-        uses: taiki-e/create-gh-release-action@v1
-        if: steps.tag.outputs.tag != ''
-        with:
-          changelog: CHANGELOG.md
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/tags/${{ needs.version.outputs.tag }}
 
   build:
     needs: version
@@ -108,12 +95,16 @@ jobs:
       - name: Determine tags
         id: tags
         run: |
+          latestTag=v$(jq -r .version package.json)
           tags="type=raw,value=latest,enable=true\ntype=sha\n"
-          version="${{ needs.version.outputs.tag }}"
-          if [ -n "$version" ]; then
-            tags="${tags}type=semver,pattern={{version}},value=$version\n"
-            tags="${tags}type=semver,pattern={{major}}.{{minor}},,value=$version\n"
-            tags="${tags}type=semver,pattern={{major}},value=$version\n"
+          if [ "steps.changesets.outputs.hasChangesets" = "false"]; then
+            git tag $tag 2>/dev/null && (git push origin --tags ; tagged="OK" >> $GITHUB_OUTPUT) || true
+            if [ -n "$tagged" ]; then
+              tags="${tags}type=semver,pattern={{version}},value=$latestTag\n"
+              tags="${tags}type=semver,pattern={{major}}.{{minor}},,value=$latestTag\n"
+              tags="${tags}type=semver,pattern={{major}},value=$latestTag\n"
+              echo "new=true" >> $GITHUB_OUTPUT
+            fi
           fi
           tags=$(echo -e "$tags")
           echo "TAGS: $tags"
@@ -154,3 +145,14 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
+      - name: Create GitHub Release
+        uses: taiki-e/create-gh-release-action@v1
+        if: steps.tags.outputs.new == 'true'
+        with:
+          changelog: CHANGELOG.md
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: refs/tags/${{ needs.version.outputs.tag }}
+      - name: Remove tag
+        uses: taiki-e/create-gh-release-action@v1
+        if: failure() && steps.tags.outputs.new == 'true'
+        run: git push --delete origin ${{ steps.tags.outputs.new }}
